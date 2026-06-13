@@ -143,7 +143,9 @@ export default function Landing() {
           className="text-center text-muted mt-3"
           style={{ fontSize: "0.8rem" }}
         >
-          Necesitas logearte para poder guardar tus resultados.
+          Necesitas logearte para poder guardar tus resultados. Esta página usa
+          Supabase como hosting y así aparecerá en el correo y en la
+          autenticación de Google.
         </p>
       </div>
     </div>
