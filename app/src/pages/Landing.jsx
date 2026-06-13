@@ -41,9 +41,7 @@ export default function Landing() {
       <div style={{ width: "100%", maxWidth: "420px" }}>
         {/* Header */}
         <div className="text-center" style={{ marginBottom: "2.5rem" }}>
-          <h1 style={{ marginBottom: "0.5rem" }}>
-            Mind Mirror - Test Psicológicos
-          </h1>
+          <h1 style={{ marginBottom: "0.5rem" }}>Mind Mirror</h1>
           <p>Evaluaciones psicológicas by PGB.</p>
         </div>
 
@@ -145,7 +143,7 @@ export default function Landing() {
           className="text-center text-muted mt-3"
           style={{ fontSize: "0.8rem" }}
         >
-          Necesitas crear una cuenta para poder guardar tus resultados.
+          Necesitas logearte para poder guardar tus resultados.
         </p>
       </div>
     </div>
