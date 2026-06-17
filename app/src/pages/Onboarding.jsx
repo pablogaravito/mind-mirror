@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-export default function Onboarding({ session, onComplete }) {
+export default function Onboarding({ session, onComplete, redirectTo = "/dashboard" }) {
   const navigate  = useNavigate()
   const [form, setForm] = useState({ full_name: '', birth_date: '', gender: '' })
   const [loading, setLoading] = useState(false)
@@ -35,7 +35,7 @@ export default function Onboarding({ session, onComplete }) {
     }
 
     await onComplete(session.user.id)
-    navigate('/dashboard')
+    navigate(redirectTo)
   }
 
   return (

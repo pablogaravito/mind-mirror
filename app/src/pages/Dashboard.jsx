@@ -2,62 +2,116 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-export default function Dashboard({ profile }) {
-  const [tests, setTests]       = useState([])
-  const [sessions, setSessions] = useState([])
-  const [loading, setLoading]   = useState(true)
+export default function Dashboard({ profile, isAdmin }) {
+  const [assignedTests, setAssignedTests] = useState([])
+  const [allTests, setAllTests]           = useState([]) // for admins
+  const [sessions, setSessions]           = useState([])
+  const [loading, setLoading]             = useState(true)
 
   useEffect(() => {
-    async function load() {
-      const [{ data: testsData }, { data: sessionsData }] = await Promise.all([
-        supabase.from('tests').select('*').eq('is_active', true).order('id'),
-        supabase
-          .from('test_sessions')
-          .select('id, test_id, status, completed_at, scores, tests(name, slug)')
-          .eq('user_id', profile.id)
-          .eq('status', 'completed')
-          .order('completed_at', { ascending: false })
-          .limit(10),
-      ])
-      setTests(testsData || [])
-      setSessions(sessionsData || [])
-      setLoading(false)
+    isAdmin ? loadAdmin() : loadUser()
+  }, [profile.id, isAdmin])
+
+  async function loadUser() {
+    // Get user's assignment
+    const { data: assignment } = await supabase
+      .from('assignments')
+      .select('id, display_name, assigned_tests(*, tests(*))')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+
+    // Get all sessions for this user
+    const { data: sessionsData } = await supabase
+      .from('test_sessions')
+      .select('id, test_id, status, completed_at, started_at, scores, tests(name, slug)')
+      .eq('user_id', profile.id)
+      .order('started_at', { ascending: false })
+
+    if (assignment?.assigned_tests) {
+      const sorted = [...assignment.assigned_tests]
+        .filter(at => at.is_active)
+        .sort((a, b) => a.display_order - b.display_order)
+      setAssignedTests(sorted)
     }
-    load()
-  }, [profile.id])
+
+    setSessions(sessionsData || [])
+    setLoading(false)
+  }
+
+  async function loadAdmin() {
+    const [{ data: testsData }, { data: sessionsData }] = await Promise.all([
+      supabase.from('tests').select('*').eq('is_active', true).order('id'),
+      supabase
+        .from('test_sessions')
+        .select('id, test_id, status, completed_at, started_at, scores, tests(name, slug)')
+        .eq('user_id', profile.id)
+        .order('started_at', { ascending: false })
+        .limit(5),
+    ])
+    setAllTests(testsData || [])
+    setSessions(sessionsData || [])
+    setLoading(false)
+  }
 
   if (loading) return <div className="spinner" />
+
+  // Helper: find the most recent session for a given test_id
+  function getSessionForTest(testId) {
+    return sessions.find(s => s.test_id === testId) || null
+  }
 
   return (
     <div className="page">
       <div className="container">
 
-        {/* Greeting */}
         <div style={{ marginBottom: '2.5rem' }}>
           <h2>Hola, {profile.full_name.split(' ')[0]}</h2>
-          <p className="mt-1">Selecciona un test para comenzar o revisa tus resultados anteriores.</p>
+          <p className="mt-1">
+            {isAdmin
+              ? 'Bienvenido al panel. Aquí puedes tomar tests o ir al panel de administración.'
+              : 'Aquí están tus evaluaciones asignadas.'}
+          </p>
         </div>
 
-        {/* Available tests */}
-        <section>
-          <h3 style={{ marginBottom: '1rem', color: 'var(--text)' }}>Tests disponibles</h3>
-          <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-            {tests.map(test => (
-              <TestCard key={test.id} test={test} />
-            ))}
-          </div>
-        </section>
-
-        {/* Past sessions */}
-        {sessions.length > 0 && (
-          <section style={{ marginTop: '3rem' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--text)' }}>Resultados anteriores</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {sessions.map(s => (
-                <SessionRow key={s.id} session={s} />
+        {/* Admin: show all tests */}
+        {isAdmin && (
+          <section>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--text)' }}>Tests disponibles</h3>
+            <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+              {allTests.map(test => (
+                <TestCard
+                  key={test.id}
+                  test={test}
+                  session={getSessionForTest(test.id)}
+                  showResults={true}
+                />
               ))}
             </div>
           </section>
+        )}
+
+        {/* Regular user: show assigned tests */}
+        {!isAdmin && assignedTests.length > 0 && (
+          <section>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {assignedTests.map(at => (
+                <TestCard
+                  key={at.id}
+                  test={at.tests}
+                  session={getSessionForTest(at.test_id)}
+                  showResults={at.show_results ?? at.tests?.report_config?.show_results_to_user ?? false}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* No assignment yet */}
+        {!isAdmin && assignedTests.length === 0 && (
+          <div className="card text-center" style={{ padding: '3rem' }}>
+            <p style={{ fontSize: '1rem', color: 'var(--text)' }}>No tienes evaluaciones asignadas aún.</p>
+            <p className="mt-2" style={{ fontSize: '0.875rem' }}>Contacta a tu psicólogo si crees que esto es un error.</p>
+          </div>
         )}
 
       </div>
@@ -65,9 +119,24 @@ export default function Dashboard({ profile }) {
   )
 }
 
-function TestCard({ test }) {
-  const config = test.display_config || {}
-  const items  = test.scoring_config?.aspects?.reduce((acc, a) => acc + a.normal_items.length + a.reverse_items.length, 0)
+function TestCard({ test, session, showResults }) {
+  if (!test) return null
+
+  const config      = test.display_config || {}
+  const allowResume = config.allow_resume !== false
+  const itemCount   = test.scoring_config?.aspects?.reduce(
+    (acc, a) => acc + a.normal_items.length + a.reverse_items.length, 0
+  )
+
+  // Determine card state
+  const isCompleted   = session?.status === 'completed'
+  const isInProgress  = session?.status === 'in_progress'
+  const isAbandoned   = session?.status === 'abandoned'
+  const canResume     = isInProgress && allowResume
+
+  // Count answered questions for resume progress
+  // We'll show a rough progress based on stored responses if available
+  const progressLabel = isInProgress ? 'En progreso' : null
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -75,35 +144,66 @@ function TestCard({ test }) {
         <h3 style={{ color: 'var(--text)', marginBottom: '0.35rem' }}>{test.name}</h3>
         <p style={{ fontSize: '0.875rem' }}>{test.description}</p>
       </div>
-      <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        {items && <span>{items} ítems</span>}
+
+      <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+        {itemCount && <span>{itemCount} ítems</span>}
         {config.questions_per_page && <span>{config.questions_per_page} por página</span>}
+        {progressLabel && (
+          <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{progressLabel}</span>
+        )}
       </div>
-      <Link
-        to={`/test/${test.slug}`}
-        className="btn btn--primary"
-        style={{ marginTop: 'auto' }}
-      >
-        Comenzar
-      </Link>
-    </div>
-  )
-}
 
-function SessionRow({ session }) {
-  const date = new Date(session.completed_at).toLocaleDateString('es-PE', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  })
+      {/* Action button */}
+      <div style={{ marginTop: 'auto' }}>
+        {isAbandoned && (
+          <div>
+            <span className="badge badge--rejected" style={{ marginBottom: '0.5rem', display: 'inline-block' }}>
+              Sesión interrumpida
+            </span>
+            <p style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
+              Contacta a tu psicólogo para que te la asigne de nuevo.
+            </p>
+          </div>
+        )}
 
-  return (
-    <div className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-      <div>
-        <span style={{ fontWeight: 500, color: 'var(--text)' }}>{session.tests?.name}</span>
-        <span style={{ marginLeft: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{date}</span>
+        {isCompleted && showResults && (
+          <Link to={`/results/${session.id}`} className="btn btn--outline btn--full">
+            Ver resultados
+          </Link>
+        )}
+
+        {isCompleted && !showResults && (
+          <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
+            ✓ Completado
+          </div>
+        )}
+
+        {canResume && (
+          <Link
+            to={`/test/${test.slug}/resume/${session.id}`}
+            className="btn btn--primary btn--full"
+          >
+            Continuar
+          </Link>
+        )}
+
+        {isInProgress && !allowResume && (
+          <div>
+            <span className="badge badge--rejected" style={{ marginBottom: '0.5rem', display: 'inline-block' }}>
+              Sesión interrumpida
+            </span>
+            <p style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
+              Contacta a tu psicólogo para que te la asigne de nuevo.
+            </p>
+          </div>
+        )}
+
+        {!session && (
+          <Link to={`/test/${test.slug}`} className="btn btn--primary btn--full">
+            Comenzar
+          </Link>
+        )}
       </div>
-      <Link to={`/results/${session.id}`} className="btn btn--outline" style={{ padding: '0.4rem 1rem', fontSize: '0.875rem' }}>
-        Ver resultados
-      </Link>
     </div>
   )
 }

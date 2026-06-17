@@ -2,29 +2,28 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
-import Landing     from './pages/Landing'
-import Onboarding  from './pages/Onboarding'
-import Dashboard   from './pages/Dashboard'
-import Test        from './pages/Test'
-import Results     from './pages/Results'
-import Admin       from './pages/Admin'
+import Landing    from './pages/Landing'
+import Onboarding from './pages/Onboarding'
+import ClaimCode  from './pages/ClaimCode'
+import Dashboard  from './pages/Dashboard'
+import Test       from './pages/Test'
+import Results    from './pages/Results'
+import Admin      from './pages/Admin'
 
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute     from './components/AdminRoute'
 import Navbar         from './components/Navbar'
 
 export default function App() {
-  const [session, setSession]   = useState(undefined) // undefined = loading
-  const [profile, setProfile]   = useState(null)
+  const [session, setSession] = useState(undefined)
+  const [profile, setProfile] = useState(null)
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) fetchProfile(session.user.id)
     })
 
-    // Listen for auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) fetchProfile(session.user.id)
@@ -43,10 +42,7 @@ export default function App() {
     setProfile(data)
   }
 
-  // Still loading auth state — show nothing to avoid flash
-  if (session === undefined) {
-    return <div className="spinner" style={{ marginTop: '6rem' }} />
-  }
+  if (session === undefined) return <div className="spinner" style={{ marginTop: '6rem' }} />
 
   const isOnboarded = profile?.full_name && profile?.birth_date && profile?.gender
   const isAdmin     = profile?.role === 'admin'
@@ -55,29 +51,43 @@ export default function App() {
     <BrowserRouter>
       {session && <Navbar profile={profile} isAdmin={isAdmin} />}
       <Routes>
-        {/* Public */}
+
         <Route
           path="/"
           element={session ? <Navigate to="/dashboard" replace /> : <Landing />}
         />
 
-        {/* Auth callback — Supabase redirects here after magic link / OAuth */}
-        <Route
-          path="/auth/callback"
-          element={<AuthCallback />}
-        />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
-        {/* Onboarding — logged in but profile not complete */}
         <Route
           path="/onboarding"
           element={
             <ProtectedRoute session={session}>
-              <Onboarding profile={profile} onComplete={fetchProfile} session={session} />
+              <Onboarding
+                profile={profile}
+                onComplete={fetchProfile}
+                session={session}
+                redirectTo={isAdmin ? '/dashboard' : '/claim'}
+              />
             </ProtectedRoute>
           }
         />
 
-        {/* Dashboard — requires completed profile */}
+        <Route
+          path="/claim"
+          element={
+            <ProtectedRoute session={session}>
+              {!profile ? (
+                <div className="spinner" />
+              ) : !isOnboarded ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
+                <ClaimCode profile={profile} session={session} />
+              )}
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/dashboard"
           element={
@@ -87,13 +97,12 @@ export default function App() {
               ) : !isOnboarded ? (
                 <Navigate to="/onboarding" replace />
               ) : (
-                <Dashboard profile={profile} />
+                <Dashboard profile={profile} isAdmin={isAdmin} />
               )}
             </ProtectedRoute>
           }
         />
 
-        {/* Test taking */}
         <Route
           path="/test/:slug"
           element={
@@ -103,7 +112,15 @@ export default function App() {
           }
         />
 
-        {/* Results */}
+        <Route
+          path="/test/:slug/resume/:sessionId"
+          element={
+            <ProtectedRoute session={session}>
+              <Test session={session} />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/results/:sessionId"
           element={
@@ -113,7 +130,6 @@ export default function App() {
           }
         />
 
-        {/* Admin */}
         <Route
           path="/admin"
           element={
@@ -123,18 +139,14 @@ export default function App() {
           }
         />
 
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
 }
 
-// Handles the redirect back from Supabase after magic link / Google OAuth
 function AuthCallback() {
   useEffect(() => {
-    // Supabase JS v2 handles the session from the URL automatically.
-    // We just need to redirect the user onward.
     supabase.auth.getSession().then(() => {
       window.location.replace('/dashboard')
     })

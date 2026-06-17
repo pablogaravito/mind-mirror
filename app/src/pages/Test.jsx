@@ -1,19 +1,20 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 export default function Test({ session }) {
-  const { slug }     = useParams()
-  const navigate     = useNavigate()
+  const { slug, sessionId: resumeSessionId } = useParams()
+  const navigate = useNavigate()
 
-  const [test, setTest]         = useState(null)
-  const [items, setItems]       = useState([])
+  const [test, setTest]           = useState(null)
+  const [items, setItems]         = useState([])
   const [sessionId, setSessionId] = useState(null)
   const [responses, setResponses] = useState({}) // { item_id: value }
-  const [page, setPage]         = useState(0)
-  const [loading, setLoading]   = useState(true)
+  const [page, setPage]           = useState(0)
+  const [loading, setLoading]     = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError]       = useState('')
+  const [error, setError]         = useState('')
+  const [showNote, setShowNote]   = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -35,37 +36,84 @@ export default function Test({ session }) {
       setTest(testData)
       setItems(sortedItems)
 
-      // Create a new session
-      const { data: sess, error: sessErr } = await supabase
-        .from('test_sessions')
-        .insert({ user_id: session.user.id, test_id: testData.id })
-        .select()
-        .single()
-
-      if (sessErr) {
-        setError('No se pudo iniciar la sesión. Intenta de nuevo.')
-        setLoading(false)
-        return
+      // Resume existing session or create new one
+      if (resumeSessionId) {
+        await resumeSession(resumeSessionId, sortedItems, testData.display_config?.questions_per_page || 10)
+      } else {
+        await createSession(testData.id)
       }
 
-      setSessionId(sess.id)
       setLoading(false)
     }
     load()
-  }, [slug, session.user.id])
+  }, [slug, resumeSessionId, session.user.id])
+
+  async function createSession(testId) {
+    const { data: sess, error: sessErr } = await supabase
+      .from('test_sessions')
+      .insert({ user_id: session.user.id, test_id: testId })
+      .select()
+      .single()
+
+    if (sessErr) { setError('No se pudo iniciar la sesión.'); return }
+    setSessionId(sess.id)
+  }
+
+  async function resumeSession(sessId, sortedItems, perPage) {
+    setSessionId(sessId)
+
+    // Load existing responses
+    const { data: existingResponses } = await supabase
+      .from('test_responses')
+      .select('item_id, response_value')
+      .eq('session_id', sessId)
+
+    if (existingResponses?.length) {
+      const map = {}
+      existingResponses.forEach(r => { map[r.item_id] = r.response_value })
+      setResponses(map)
+
+      // Jump to the first page that has unanswered questions
+      const answeredIndices = new Set(
+        sortedItems
+          .filter(item => map[item.id] !== undefined)
+          .map(item => item.item_index)
+      )
+      const firstUnanswered = sortedItems.findIndex(item => !answeredIndices.has(item.item_index))
+      if (firstUnanswered > 0) {
+        setPage(Math.floor(firstUnanswered / perPage))
+      }
+    }
+  }
 
   const perPage    = test?.display_config?.questions_per_page || 10
   const totalPages = Math.ceil(items.length / perPage)
   const pageItems  = items.slice(page * perPage, (page + 1) * perPage)
-  const progress   = Math.round(((page * perPage + Object.keys(responses).length) / items.length) * 100)
-
+  const answeredTotal = Object.keys(responses).length
+  const progress   = Math.round((answeredTotal / items.length) * 100)
   const pageAnswered = pageItems.every(item => responses[item.id] !== undefined)
+  const allAnswered  = answeredTotal === items.length
 
   function handleResponse(itemId, value) {
     setResponses(prev => ({ ...prev, [itemId]: value }))
   }
 
   async function handleNext() {
+    // Save responses for current page to DB (upsert)
+    const pageRows = pageItems
+      .filter(item => responses[item.id] !== undefined)
+      .map(item => ({
+        session_id:     sessionId,
+        item_id:        item.id,
+        response_value: responses[item.id],
+      }))
+
+    if (pageRows.length) {
+      await supabase
+        .from('test_responses')
+        .upsert(pageRows, { onConflict: 'session_id,item_id' })
+    }
+
     if (page < totalPages - 1) {
       setPage(p => p + 1)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -75,27 +123,11 @@ export default function Test({ session }) {
   }
 
   async function handleSubmit() {
+    if (!allAnswered) return
     setSubmitting(true)
     setError('')
 
-    // Save all responses
-    const responseRows = items.map(item => ({
-      session_id:     sessionId,
-      item_id:        item.id,
-      response_value: responses[item.id] ?? 0,
-    }))
-
-    const { error: respErr } = await supabase
-      .from('test_responses')
-      .insert(responseRows)
-
-    if (respErr) {
-      setError('Error al guardar respuestas. Intenta de nuevo.')
-      setSubmitting(false)
-      return
-    }
-
-    // Call scoring serverless function
+    // Call scoring function
     const res = await fetch('/api/score-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -112,18 +144,56 @@ export default function Test({ session }) {
   }
 
   if (loading) return <div className="spinner" />
-  if (error)   return <div className="page"><div className="container"><p style={{ color: 'var(--danger)' }}>{error}</p></div></div>
+  if (error)   return (
+    <div className="page">
+      <div className="container">
+        <p style={{ color: 'var(--danger)' }}>{error}</p>
+      </div>
+    </div>
+  )
 
-  const labels = test.display_config?.response_labels || {}
+  const labels      = test.display_config?.response_labels || {}
+  const note        = test.display_config?.completion_note
+  const allowResume = test.display_config?.allow_resume !== false
 
   return (
     <div className="page">
       <div className="container">
 
+        {/* Completion note — shown once at the start */}
+        {showNote && note && page === 0 && answeredTotal === 0 && (
+          <div style={{
+            background: 'var(--accent-dim)',
+            border: '1px solid var(--accent)',
+            borderRadius: 'var(--radius)',
+            padding: '0.9rem 1.2rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '1rem',
+          }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--accent)', margin: 0 }}>
+              💡 {note}
+            </p>
+            <button
+              onClick={() => setShowNote(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '1rem', flexShrink: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ marginBottom: '2rem' }}>
           <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
             {test.name}
+            {resumeSessionId && (
+              <span style={{ marginLeft: '0.5rem', color: 'var(--accent)', fontWeight: 500 }}>
+                · Continuando sesión anterior
+              </span>
+            )}
           </p>
           <h2>Página {page + 1} de {totalPages}</h2>
 
@@ -137,7 +207,9 @@ export default function Test({ session }) {
               transition: 'width 0.3s ease',
             }} />
           </div>
-          <p style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>{progress}% completado</p>
+          <p style={{ fontSize: '0.75rem', marginTop: '0.35rem' }}>
+            {answeredTotal} de {items.length} preguntas respondidas
+          </p>
         </div>
 
         {/* Response scale legend */}
@@ -168,7 +240,7 @@ export default function Test({ session }) {
         </div>
 
         {/* Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
           <button
             className="btn btn--ghost"
             onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
@@ -184,7 +256,11 @@ export default function Test({ session }) {
             onClick={handleNext}
             disabled={!pageAnswered || submitting}
           >
-            {submitting ? 'Calculando...' : page < totalPages - 1 ? 'Siguiente →' : 'Ver resultados'}
+            {submitting
+              ? 'Calculando...'
+              : page < totalPages - 1
+                ? 'Siguiente →'
+                : 'Ver resultados'}
           </button>
         </div>
 
@@ -228,7 +304,7 @@ function QuestionCard({ item, number, value, onChange, min, max, labels }) {
           </button>
         ))}
       </div>
-      {labels[String(value)] !== undefined && value !== undefined && (
+      {value !== undefined && labels[String(value)] && (
         <p style={{ fontSize: '0.78rem', marginTop: '0.5rem', color: 'var(--accent)' }}>
           {labels[String(value)]}
         </p>
