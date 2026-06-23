@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 const TABS = [
   { id: 'assignments', label: 'Asignaciones' },
+  { id: 'results',     label: 'Resultados' },
+  { id: 'tests',       label: 'Tests' },
   { id: 'pdf',         label: 'Solicitudes PDF' },
 ]
 
@@ -17,23 +20,22 @@ export default function Admin() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
+        <div style={{
+          display: 'flex', gap: '0', marginBottom: '2rem',
+          borderBottom: '1px solid var(--border)',
+        }}>
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                background: 'none',
-                border: 'none',
-                padding: '0.6rem 1.1rem',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-body)',
-                fontSize: '0.95rem',
+                background: 'none', border: 'none',
+                padding: '0.6rem 1.1rem', cursor: 'pointer',
+                fontFamily: 'var(--font-body)', fontSize: '0.95rem',
                 fontWeight: tab === t.id ? 600 : 400,
                 color: tab === t.id ? 'var(--accent)' : 'var(--text-muted)',
                 borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-                marginBottom: '-1px',
-                transition: 'color 0.15s',
+                marginBottom: '-1px', transition: 'color 0.15s',
               }}
             >
               {t.label}
@@ -42,9 +44,210 @@ export default function Admin() {
         </div>
 
         {tab === 'assignments' && <AssignmentsTab />}
+        {tab === 'results'     && <ResultsTab />}
+        {tab === 'tests'       && <TestsTab />}
         {tab === 'pdf'         && <PdfRequestsTab />}
       </div>
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// RESULTADOS TAB — list of completed sessions
+// ─────────────────────────────────────────────────────────────
+function ResultsTab() {
+  const navigate        = useNavigate()
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading]   = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('test_sessions')
+        .select('id, completed_at, scores, status, tests(name, slug), profiles:user_id(full_name)')
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+      setSessions(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) return <div className="spinner" />
+
+  if (!sessions.length) return (
+    <div className="card text-center" style={{ padding: '3rem' }}>
+      <p>No hay sesiones completadas aún.</p>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {sessions.map(sess => {
+        const date = sess.completed_at
+          ? new Date(sess.completed_at).toLocaleDateString('es-PE', {
+              day: 'numeric', month: 'short', year: 'numeric',
+            })
+          : '—'
+
+        // Extract domain scores for quick preview
+        const scores  = sess.scores || {}
+        const domains = Object.values(scores).filter(s => s.type === 'domain')
+
+        return (
+          <div
+            key={sess.id}
+            className="card"
+            style={{ padding: '1.25rem 1.5rem', cursor: 'pointer', transition: 'box-shadow 0.15s' }}
+            onClick={() => navigate(`/admin/session/${sess.id}`)}
+            onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow = ''}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                  {sess.profiles?.full_name || 'Usuario'}
+                </span>
+                <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {sess.tests?.name}
+                </span>
+                <p style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>{date}</p>
+              </div>
+
+              {/* Domain score pills */}
+              {domains.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {domains.map(d => (
+                    <span
+                      key={d.scale_id}
+                      style={{
+                        fontSize: '0.75rem',
+                        background: 'var(--accent-dim)',
+                        color: 'var(--accent)',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '99px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {d.display_name}: p{d.percentile}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// TESTS TAB — global test settings (Phase 1)
+// ─────────────────────────────────────────────────────────────
+function TestsTab() {
+  const [tests, setTests]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(null) // test id being saved
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('tests')
+        .select('id, name, slug, is_active, report_config, display_config')
+        .order('id')
+      setTests(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function updateTest(testId, field, value) {
+    setSaving(testId)
+    const test = tests.find(t => t.id === testId)
+
+    let update = {}
+    if (field === 'is_active') {
+      update = { is_active: value }
+    } else if (field === 'show_results_to_user') {
+      update = { report_config: { ...test.report_config, show_results_to_user: value } }
+    } else if (field === 'pdf_available') {
+      update = { report_config: { ...test.report_config, pdf_available: value } }
+    }
+
+    await supabase.from('tests').update(update).eq('id', testId)
+    setTests(prev => prev.map(t => {
+      if (t.id !== testId) return t
+      if (field === 'is_active') return { ...t, is_active: value }
+      return { ...t, report_config: { ...t.report_config, [field === 'show_results_to_user' ? 'show_results_to_user' : 'pdf_available']: value } }
+    }))
+    setSaving(null)
+  }
+
+  if (loading) return <div className="spinner" />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {tests.map(test => (
+        <div key={test.id} className="card" style={{ padding: '1.25rem 1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-start' }}>
+            <div>
+              <h3 style={{ color: 'var(--text)', fontSize: '1rem' }}>{test.name}</h3>
+              <p style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}>{test.slug}</p>
+            </div>
+            {saving === test.id && (
+              <span style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>Guardando...</span>
+            )}
+          </div>
+
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <Toggle
+              label="Test activo (visible en asignaciones)"
+              value={test.is_active}
+              onChange={v => updateTest(test.id, 'is_active', v)}
+            />
+            <Toggle
+              label="Mostrar resultados al usuario por defecto"
+              hint="Puede sobreescribirse por asignación"
+              value={test.report_config?.show_results_to_user ?? false}
+              onChange={v => updateTest(test.id, 'show_results_to_user', v)}
+            />
+            <Toggle
+              label="PDF disponible para este test"
+              value={test.report_config?.pdf_available ?? false}
+              onChange={v => updateTest(test.id, 'pdf_available', v)}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Toggle({ label, hint, value, onChange }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+      <div
+        onClick={() => onChange(!value)}
+        style={{
+          width: '40px', height: '22px', borderRadius: '99px', flexShrink: 0,
+          background: value ? 'var(--accent)' : 'var(--border)',
+          position: 'relative', transition: 'background 0.2s', cursor: 'pointer',
+        }}
+      >
+        <div style={{
+          position: 'absolute', top: '3px',
+          left: value ? '21px' : '3px',
+          width: '16px', height: '16px',
+          borderRadius: '50%', background: '#fff',
+          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }} />
+      </div>
+      <div>
+        <span style={{ fontSize: '0.875rem', color: 'var(--text)' }}>{label}</span>
+        {hint && <p style={{ fontSize: '0.78rem', marginTop: '0' }}>{hint}</p>}
+      </div>
+    </label>
   )
 }
 
@@ -95,7 +298,7 @@ function AssignmentsTab() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {assignments.map(a => (
-          <AssignmentCard key={a.id} assignment={a} tests={tests} onUpdate={load} />
+          <AssignmentCard key={a.id} assignment={a} onUpdate={load} />
         ))}
       </div>
 
@@ -109,11 +312,11 @@ function AssignmentsTab() {
 }
 
 function NewAssignmentForm({ tests, onClose, onCreated }) {
-  const [name, setName]           = useState('')
-  const [notes, setNotes]         = useState('')
-  const [selectedTests, setSelectedTests] = useState([]) // [{ test_id, show_results }]
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
+  const [name, setName]                   = useState('')
+  const [notes, setNotes]                 = useState('')
+  const [selectedTests, setSelectedTests] = useState([])
+  const [loading, setLoading]             = useState(false)
+  const [error, setError]                 = useState('')
 
   function toggleTest(testId) {
     setSelectedTests(prev =>
@@ -167,18 +370,15 @@ function NewAssignmentForm({ tests, onClose, onCreated }) {
   return (
     <div className="card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid var(--accent)' }}>
       <h3 style={{ color: 'var(--text)', marginBottom: '1.25rem' }}>Nueva asignación</h3>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div className="field">
           <label>Nombre (referencia interna)</label>
           <input placeholder="Ej. Pepito García" value={name} onChange={e => setName(e.target.value)} />
         </div>
-
         <div className="field">
           <label>Notas (solo visibles para ti)</label>
           <input placeholder="Ej. Derivado por Dr. Martínez" value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
-
         <div>
           <label style={{ fontSize: '0.875rem', fontWeight: 500, display: 'block', marginBottom: '0.5rem' }}>
             Tests a asignar
@@ -189,11 +389,7 @@ function NewAssignmentForm({ tests, onClose, onCreated }) {
               return (
                 <div key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 400 }}>
-                    <input
-                      type="checkbox"
-                      checked={!!selected}
-                      onChange={() => toggleTest(test.id)}
-                    />
+                    <input type="checkbox" checked={!!selected} onChange={() => toggleTest(test.id)} />
                     {test.name}
                   </label>
                   {selected && (
@@ -202,7 +398,7 @@ function NewAssignmentForm({ tests, onClose, onCreated }) {
                       onChange={e => setShowResults(test.id, e.target.value === 'default' ? null : e.target.value === 'yes')}
                       style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '6px' }}
                     >
-                      <option value="default">Visibilidad: por defecto</option>
+                      <option value="default">Visibilidad: por defecto del test</option>
                       <option value="yes">Mostrar resultados al usuario</option>
                       <option value="no">Ocultar resultados al usuario</option>
                     </select>
@@ -212,9 +408,7 @@ function NewAssignmentForm({ tests, onClose, onCreated }) {
             })}
           </div>
         </div>
-
         {error && <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{error}</p>}
-
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button className="btn btn--primary" onClick={handleCreate} disabled={loading}>
             {loading ? 'Creando...' : 'Crear asignación'}
@@ -226,7 +420,7 @@ function NewAssignmentForm({ tests, onClose, onCreated }) {
   )
 }
 
-function AssignmentCard({ assignment, tests, onUpdate }) {
+function AssignmentCard({ assignment, onUpdate }) {
   const [copied, setCopied] = useState(false)
 
   function copyCode() {
@@ -236,8 +430,8 @@ function AssignmentCard({ assignment, tests, onUpdate }) {
   }
 
   const statusLabel = {
-    pending:   { label: 'Pendiente', cls: 'badge--pending' },
-    claimed:   { label: 'Reclamado', cls: 'badge--approved' },
+    pending:   { label: 'Pendiente',  cls: 'badge--pending' },
+    claimed:   { label: 'Reclamado',  cls: 'badge--approved' },
     completed: { label: 'Completado', cls: 'badge--downloaded' },
   }[assignment.status] || { label: assignment.status, cls: '' }
 
@@ -261,29 +455,30 @@ function AssignmentCard({ assignment, tests, onUpdate }) {
           )}
           <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
             {(assignment.assigned_tests || []).map(at => (
-              <span key={at.id} style={{ fontSize: '0.75rem', background: 'var(--accent-dim)', color: 'var(--accent)', padding: '0.15rem 0.5rem', borderRadius: '99px' }}>
+              <span key={at.id} style={{
+                fontSize: '0.75rem', background: 'var(--accent-dim)',
+                color: 'var(--accent)', padding: '0.15rem 0.5rem', borderRadius: '99px',
+              }}>
                 {at.tests?.name}
               </span>
             ))}
           </div>
         </div>
 
-        {/* Code chip */}
         {assignment.status === 'pending' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
             <div style={{
-              fontFamily: 'monospace',
-              fontSize: '1.4rem',
-              fontWeight: 700,
-              letterSpacing: '0.15em',
-              color: 'var(--accent)',
-              background: 'var(--accent-dim)',
-              padding: '0.35rem 0.75rem',
-              borderRadius: 'var(--radius)',
+              fontFamily: 'monospace', fontSize: '1.4rem', fontWeight: 700,
+              letterSpacing: '0.15em', color: 'var(--accent)',
+              background: 'var(--accent-dim)', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius)',
             }}>
               {assignment.claim_code}
             </div>
-            <button className="btn btn--ghost" style={{ fontSize: '0.78rem', padding: '0.2rem 0.6rem' }} onClick={copyCode}>
+            <button
+              className="btn btn--ghost"
+              style={{ fontSize: '0.78rem', padding: '0.2rem 0.6rem' }}
+              onClick={copyCode}
+            >
               {copied ? '✓ Copiado' : 'Copiar código'}
             </button>
           </div>
@@ -307,7 +502,7 @@ function PdfRequestsTab() {
     setLoading(true)
     const { data } = await supabase
       .from('pdf_requests')
-      .select(`*, profiles:user_id(full_name, birth_date, gender), test_sessions:session_id(completed_at, scores, tests(name))`)
+      .select('*, profiles:user_id(full_name), test_sessions:session_id(completed_at, tests(name))')
       .eq('status', filter)
       .order('requested_at', { ascending: true })
     setRequests(data || [])
@@ -353,55 +548,32 @@ function PdfRequestsTab() {
         </div>
       )}
 
-      {!loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {requests.map(req => (
-            <PdfRequestCard key={req.id} req={req} onUpdateStatus={updateStatus} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PdfRequestCard({ req, onUpdateStatus }) {
-  const profile     = req.profiles
-  const testSession = req.test_sessions
-
-  const requestedDate = new Date(req.requested_at).toLocaleDateString('es-PE', {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
-
-  return (
-    <div className="card" style={{ padding: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, color: 'var(--text)' }}>{profile?.full_name || '—'}</span>
-            <span className={`badge badge--${req.status}`}>
-              {req.status === 'pending'    && 'Pendiente'}
-              {req.status === 'approved'   && 'Aprobada'}
-              {req.status === 'rejected'   && 'Rechazada'}
-              {req.status === 'downloaded' && 'Descargada'}
-            </span>
+      {!loading && requests.map(req => (
+        <div key={req.id} className="card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>{req.profiles?.full_name || '—'}</span>
+                <span className={`badge badge--${req.status}`}>
+                  {req.status === 'pending' && 'Pendiente'}
+                  {req.status === 'approved' && 'Aprobada'}
+                  {req.status === 'rejected' && 'Rechazada'}
+                  {req.status === 'downloaded' && 'Descargada'}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                <strong>Test:</strong> {req.test_sessions?.tests?.name || '—'}
+              </p>
+            </div>
+            {req.status === 'pending' && (
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button className="btn btn--primary" style={{ fontSize: '0.875rem' }} onClick={() => updateStatus(req.id, 'approved')}>Aprobar</button>
+                <button className="btn btn--danger"  style={{ fontSize: '0.875rem' }} onClick={() => updateStatus(req.id, 'rejected')}>Rechazar</button>
+              </div>
+            )}
           </div>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.35rem' }}>
-            <strong>Test:</strong> {testSession?.tests?.name || '—'} &nbsp;·&nbsp;
-            <strong>Solicitado:</strong> {requestedDate}
-          </p>
         </div>
-
-        {req.status === 'pending' && (
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-            <button className="btn btn--primary" style={{ fontSize: '0.875rem' }} onClick={() => onUpdateStatus(req.id, 'approved')}>
-              Aprobar
-            </button>
-            <button className="btn btn--danger" style={{ fontSize: '0.875rem' }} onClick={() => onUpdateStatus(req.id, 'rejected')}>
-              Rechazar
-            </button>
-          </div>
-        )}
-      </div>
+      ))}
     </div>
   )
 }

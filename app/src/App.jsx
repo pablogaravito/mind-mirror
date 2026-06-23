@@ -10,9 +10,10 @@ import Test       from './pages/Test'
 import Results    from './pages/Results'
 import Admin      from './pages/Admin'
 
-import ProtectedRoute from './components/ProtectedRoute'
-import AdminRoute     from './components/AdminRoute'
-import Navbar         from './components/Navbar'
+import ProtectedRoute    from './components/ProtectedRoute'
+import AdminRoute        from './components/AdminRoute'
+import Navbar            from './components/Navbar'
+import AdminSessionView  from './pages/AdminSessionView'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -135,6 +136,15 @@ export default function App() {
           element={
             <AdminRoute session={session} isAdmin={isAdmin} profile={profile}>
               <Admin />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/session/:sessionId"
+          element={
+            <AdminRoute session={session} isAdmin={isAdmin} profile={profile}>
+              <AdminSessionView />
             </AdminRoute>
           }
         />
