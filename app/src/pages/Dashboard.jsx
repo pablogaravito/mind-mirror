@@ -3,8 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
 export default function Dashboard({ profile, isAdmin }) {
+  const navigate = useNavigate();
   const [assignedTests, setAssignedTests] = useState([]);
-  const [allTests, setAllTests] = useState([]); // for admins
+  const [hasAssignment, setHasAssignment] = useState(false);
+  const [allTests, setAllTests] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -13,14 +15,12 @@ export default function Dashboard({ profile, isAdmin }) {
   }, [profile.id, isAdmin]);
 
   async function loadUser() {
-    // Get user's assignment
     const { data: assignment } = await supabase
       .from("assignments")
       .select("id, display_name, assigned_tests(*, tests(*))")
       .eq("user_id", profile.id)
       .maybeSingle();
 
-    // Get all sessions for this user
     const { data: sessionsData } = await supabase
       .from("test_sessions")
       .select(
@@ -29,11 +29,16 @@ export default function Dashboard({ profile, isAdmin }) {
       .eq("user_id", profile.id)
       .order("started_at", { ascending: false });
 
-    if (assignment?.assigned_tests) {
-      const sorted = [...assignment.assigned_tests]
+    if (assignment) {
+      setHasAssignment(true);
+      const sorted = (assignment.assigned_tests || [])
         .filter((at) => at.is_active)
         .sort((a, b) => a.display_order - b.display_order);
       setAssignedTests(sorted);
+    } else {
+      // No assignment at all — redirect to claim
+      navigate("/claim", { replace: true });
+      return;
     }
 
     setSessions(sessionsData || []);
@@ -59,7 +64,6 @@ export default function Dashboard({ profile, isAdmin }) {
 
   if (loading) return <div className="spinner" />;
 
-  // Helper: find the most recent session for a given test_id
   function getSessionForTest(testId) {
     return sessions.find((s) => s.test_id === testId) || null;
   }
@@ -101,7 +105,7 @@ export default function Dashboard({ profile, isAdmin }) {
           </section>
         )}
 
-        {/* Regular user: show assigned tests */}
+        {/* Regular user: assigned tests */}
         {!isAdmin && assignedTests.length > 0 && (
           <section>
             <div
@@ -123,9 +127,16 @@ export default function Dashboard({ profile, isAdmin }) {
           </section>
         )}
 
-        {/* No assignment yet — send them to claim */}
-        {!isAdmin && assignedTests.length === 0 && !loading && (
-          <ClaimRedirect />
+        {/* Has assignment but no active tests */}
+        {!isAdmin && hasAssignment && assignedTests.length === 0 && (
+          <div className="card text-center" style={{ padding: "3rem" }}>
+            <p style={{ fontSize: "1rem", color: "var(--text)" }}>
+              No tienes evaluaciones pendientes.
+            </p>
+            <p className="mt-2" style={{ fontSize: "0.875rem" }}>
+              Tu psicólogo te asignará nuevas evaluaciones cuando sea necesario.
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -142,15 +153,10 @@ function TestCard({ test, session, showResults }) {
     0,
   );
 
-  // Determine card state
   const isCompleted = session?.status === "completed";
   const isInProgress = session?.status === "in_progress";
   const isAbandoned = session?.status === "abandoned";
   const canResume = isInProgress && allowResume;
-
-  // Count answered questions for resume progress
-  // We'll show a rough progress based on stored responses if available
-  const progressLabel = isInProgress ? "En progreso" : null;
 
   return (
     <div
@@ -177,14 +183,13 @@ function TestCard({ test, session, showResults }) {
         {config.questions_per_page && (
           <span>{config.questions_per_page} por página</span>
         )}
-        {progressLabel && (
+        {isInProgress && (
           <span style={{ color: "var(--accent)", fontWeight: 500 }}>
-            {progressLabel}
+            En progreso
           </span>
         )}
       </div>
 
-      {/* Action button */}
       <div style={{ marginTop: "auto" }}>
         {isAbandoned && (
           <div>
@@ -255,12 +260,4 @@ function TestCard({ test, session, showResults }) {
       </div>
     </div>
   );
-}
-
-function ClaimRedirect() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    navigate("/claim", { replace: true });
-  }, []);
-  return null;
 }

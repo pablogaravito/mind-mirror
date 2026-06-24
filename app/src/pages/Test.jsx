@@ -116,7 +116,7 @@ export default function Test({ session }) {
 
     if (page < totalPages - 1) {
       setPage(p => p + 1)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      document.documentElement.scrollTop = 0; document.body.scrollTop = 0
     } else {
       await handleSubmit()
     }
@@ -243,7 +243,7 @@ export default function Test({ session }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
           <button
             className="btn btn--ghost"
-            onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            onClick={() => { setPage(p => p - 1); document.documentElement.scrollTop = 0; document.body.scrollTop = 0 }}
             disabled={page === 0}
           >
             ← Anterior
