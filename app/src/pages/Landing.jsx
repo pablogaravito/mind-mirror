@@ -31,7 +31,6 @@ export default function Landing() {
   return (
     <div
       style={{
-        height: "100vh",
         height: "100dvh", // Override for browsers that support it
         display: "flex",
         flexDirection: "column",
@@ -42,7 +41,7 @@ export default function Landing() {
         overflow: "hidden",
       }}
     >
-      <div style={{ width: "100%", maxWidth: "420px" }}>
+      <div style={{ width: "100%", maxWidth: "420px", margin: 0 }}>
         {/* Header */}
         <div className="text-center" style={{ marginBottom: "2.5rem" }}>
           <h1 style={{ marginBottom: "0.5rem" }}>Psych Tests</h1>
