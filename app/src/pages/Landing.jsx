@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../supabaseClient";
 
 export default function Landing() {
@@ -7,11 +7,7 @@ export default function Landing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Lock body scroll while on landing — prevents Android chrome collapse
-  useEffect(() => {
-    document.body.classList.add("page-landing");
-    return () => document.body.classList.remove("page-landing");
-  }, []);
+
 
   async function handleMagicLink(e) {
     e.preventDefault();
@@ -36,7 +32,7 @@ export default function Landing() {
 
   return (
     <div style={{
-      height: "100%",
+      minHeight: "100%",
       display: "flex",
       flexDirection: "column",
       justifyContent: "center",
