@@ -31,14 +31,15 @@ export default function Landing() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        minHeight: "100dvh", // Override for browsers that support it
+        height: "100vh",
+        height: "100dvh", // Override for browsers that support it
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
         padding: "2rem 1.25rem",
         boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
       <div style={{ width: "100%", maxWidth: "420px" }}>
