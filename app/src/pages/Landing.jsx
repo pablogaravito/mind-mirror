@@ -141,14 +141,6 @@ export default function Landing() {
             </>
           )}
         </div>
-
-        <p
-          className="text-center text-muted mt-3"
-          style={{ fontSize: "0.8rem" }}
-        >
-          Al ingresar aceptas el uso de tus datos para fines de evaluación
-          psicológica.
-        </p>
       </div>
     </div>
   );
