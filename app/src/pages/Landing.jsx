@@ -31,7 +31,8 @@ export default function Landing() {
   return (
     <div
       style={{
-        height: "100vh",
+        minHeight: "100vh",
+        minHeight: "100dvh", // Override for browsers that support it
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
