@@ -31,17 +31,16 @@ export default function Landing() {
   return (
     <div
       style={{
-        height: "100dvh", // Override for browsers that support it
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
+        minHeight: "100svh",
         padding: "2rem 1.25rem",
         boxSizing: "border-box",
-        overflow: "hidden",
       }}
     >
-      <div style={{ width: "100%", maxWidth: "420px", margin: 0 }}>
+      <div style={{ width: "100%", maxWidth: "420px" }}>
         {/* Header */}
         <div className="text-center" style={{ marginBottom: "2.5rem" }}>
           <h1 style={{ marginBottom: "0.5rem" }}>Psych Tests</h1>
@@ -66,7 +65,6 @@ export default function Landing() {
             </div>
           ) : (
             <>
-              {/* Google */}
               <button
                 className="btn btn--outline btn--full"
                 onClick={handleGoogle}
@@ -75,7 +73,6 @@ export default function Landing() {
                 Continuar con Google
               </button>
 
-              {/* Divider */}
               <div
                 style={{
                   display: "flex",
@@ -105,7 +102,6 @@ export default function Landing() {
                 />
               </div>
 
-              {/* Magic link */}
               <form
                 onSubmit={handleMagicLink}
                 style={{
@@ -141,6 +137,14 @@ export default function Landing() {
             </>
           )}
         </div>
+
+        <p
+          className="text-center text-muted mt-3"
+          style={{ fontSize: "0.8rem" }}
+        >
+          Al ingresar aceptas el uso de tus datos para fines de evaluación
+          psicológica.
+        </p>
       </div>
     </div>
   );
