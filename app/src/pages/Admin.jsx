@@ -211,32 +211,30 @@ function TestsTab() {
     let update = {};
     if (field === "is_active") {
       update = { is_active: value };
-    } else if (field === "show_results_to_user") {
+    } else {
       update = {
-        report_config: { ...test.report_config, show_results_to_user: value },
-      };
-    } else if (field === "pdf_available") {
-      update = {
-        report_config: { ...test.report_config, pdf_available: value },
+        report_config: { ...test.report_config, [field]: value },
       };
     }
 
-    await supabase.from("tests").update(update).eq("id", testId);
-    setTests((prev) =>
-      prev.map((t) => {
-        if (t.id !== testId) return t;
-        if (field === "is_active") return { ...t, is_active: value };
-        return {
-          ...t,
-          report_config: {
-            ...t.report_config,
-            [field === "show_results_to_user"
-              ? "show_results_to_user"
-              : "pdf_available"]: value,
-          },
-        };
-      }),
-    );
+    const { error } = await supabase
+      .from("tests")
+      .update(update)
+      .eq("id", testId);
+
+    if (!error) {
+      setTests((prev) =>
+        prev.map((t) => {
+          if (t.id !== testId) return t;
+          if (field === "is_active") return { ...t, is_active: value };
+          return {
+            ...t,
+            report_config: { ...t.report_config, [field]: value },
+          };
+        }),
+      );
+    }
+
     setSaving(null);
   }
 
