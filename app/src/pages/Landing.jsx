@@ -9,6 +9,7 @@ export default function Landing() {
 
 
 
+
   async function handleMagicLink(e) {
     e.preventDefault();
     setLoading(true);
