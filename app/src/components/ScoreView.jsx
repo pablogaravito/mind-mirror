@@ -77,7 +77,7 @@ export default function ScoreView({ scores, scales, interps }) {
         </section>
       )}
 
-      {/* Aspect scores grouped by domain — domain header includes its own interpretation */}
+      {/* Aspect scores grouped by domain */}
       {domains.map(domain => {
         const domainAspects = aspects.filter(a => a.domain_id === domain.id)
         const domainScore   = scores[domain.slug]
@@ -134,14 +134,15 @@ export default function ScoreView({ scores, scales, interps }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Domain header — color bar + name + score + interpretation toggle
+// Domain header — color bar + name + score + description + interp toggle
 // ─────────────────────────────────────────────────────────────
 function DomainHeader({ domain, score, interp }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
     <div style={{ marginBottom: '1.25rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+      {/* Title row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
         <div style={{
           width: '4px', height: '1.5rem', borderRadius: '99px',
           background: domain.color || 'var(--accent)', flexShrink: 0,
@@ -153,28 +154,39 @@ function DomainHeader({ domain, score, interp }) {
             {CATEGORY_LABELS[score.category] || score.category}
           </span>
         )}
+      </div>
+
+      {/* Description + interpretation toggle */}
+      <div style={{ paddingLeft: '1.25rem' }}>
+        {domain.description && (
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: interp?.content ? '0.5rem' : 0 }}>
+            {domain.description}
+          </p>
+        )}
         {interp?.content && (
-          <button
-            className="btn btn--ghost"
-            style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', color: 'var(--accent)', marginLeft: 'auto' }}
-            onClick={() => setExpanded(e => !e)}
-          >
-            {expanded ? 'Ocultar ↑' : 'Ver interpretación ↓'}
-          </button>
+          <>
+            <button
+              className="btn btn--ghost"
+              style={{ fontSize: '0.8rem', padding: '0.2rem 0', color: 'var(--accent)' }}
+              onClick={() => setExpanded(e => !e)}
+            >
+              {expanded ? 'Ocultar interpretación ↑' : 'Ver interpretación ↓'}
+            </button>
+            {expanded && (
+              <div style={{
+                marginTop: '0.75rem', padding: '1rem 1.25rem',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderLeft: `4px solid ${domain.color || 'var(--accent)'}`,
+                borderRadius: 'var(--radius)',
+                fontSize: '0.9rem', lineHeight: '1.7',
+              }}>
+                <InterpretationText blocks={interp.content} scale={domain} score={score} />
+              </div>
+            )}
+          </>
         )}
       </div>
-      {expanded && interp?.content && (
-        <div style={{
-          marginTop: '0.75rem', padding: '1rem 1.25rem',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderLeft: `4px solid ${domain.color || 'var(--accent)'}`,
-          borderRadius: 'var(--radius)',
-          fontSize: '0.9rem', lineHeight: '1.7',
-        }}>
-          <InterpretationText blocks={interp.content} scale={domain} score={score} />
-        </div>
-      )}
     </div>
   )
 }
@@ -248,25 +260,34 @@ export function AspectCard({ aspect, score, interp, domainColor }) {
         </div>
       </div>
 
-      {/* Interpretation toggle */}
-      {interp?.content && (
-        <>
-          <button
-            className="btn btn--ghost"
-            style={{ marginTop: '0.75rem', fontSize: '0.85rem', padding: '0.35rem 0', color: 'var(--accent)' }}
-            onClick={() => setExpanded(e => !e)}
-          >
-            {expanded ? 'Ocultar interpretación ↑' : 'Ver interpretación ↓'}
-          </button>
-          {expanded && (
-            <div style={{
-              marginTop: '1rem', fontSize: '0.9rem', lineHeight: '1.7',
-              borderTop: '1px solid var(--border)', paddingTop: '1rem',
-            }}>
-              <InterpretationText blocks={interp.content} aspect={aspect} score={score} />
-            </div>
+      {/* Description (always visible) + interpretation toggle */}
+      {(aspect.description || interp?.content) && (
+        <div style={{ marginTop: '0.75rem' }}>
+          {aspect.description && (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: interp?.content ? '0.4rem' : 0 }}>
+              {aspect.description}
+            </p>
           )}
-        </>
+          {interp?.content && (
+            <>
+              <button
+                className="btn btn--ghost"
+                style={{ fontSize: '0.85rem', padding: '0.2rem 0', color: 'var(--accent)' }}
+                onClick={() => setExpanded(e => !e)}
+              >
+                {expanded ? 'Ocultar interpretación ↑' : 'Ver interpretación ↓'}
+              </button>
+              {expanded && (
+                <div style={{
+                  marginTop: '0.75rem', fontSize: '0.9rem', lineHeight: '1.7',
+                  borderTop: '1px solid var(--border)', paddingTop: '0.75rem',
+                }}>
+                  <InterpretationText blocks={interp.content} scale={aspect} score={score} />
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   )
