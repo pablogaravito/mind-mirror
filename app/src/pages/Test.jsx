@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 export default function Test({ session }) {
-  const { slug, sessionId: resumeSessionId } = useParams()
+  const { slug, assignedTestId, sessionId: resumeSessionId } = useParams()
   const navigate = useNavigate()
 
   const [test, setTest]           = useState(null)
@@ -40,7 +40,35 @@ export default function Test({ session }) {
       if (resumeSessionId) {
         await resumeSession(resumeSessionId, sortedItems, testData.display_config?.questions_per_page || 10)
       } else {
-        await createSession(testData.id)
+        // Check for existing session for this specific assignment
+        let existingSessQuery = supabase
+          .from('test_sessions')
+          .select('id, status')
+          .eq('user_id', session.user.id)
+
+        if (assignedTestId && assignedTestId !== 'admin') {
+          // User session — match on specific assignment
+          existingSessQuery = existingSessQuery.eq('assigned_test_id', assignedTestId)
+        } else {
+          // Admin session — match on test_id only
+          existingSessQuery = existingSessQuery.eq('test_id', testData.id)
+        }
+
+        const { data: existingSess } = await existingSessQuery
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (existingSess?.status === 'completed') {
+          // Already done — redirect to results
+          navigate(`/results/${existingSess.id}`, { replace: true })
+          return
+        } else if (existingSess?.status === 'in_progress' && testData.display_config?.allow_resume !== false) {
+          // Resume existing in-progress session
+          await resumeSession(existingSess.id, sortedItems, testData.display_config?.questions_per_page || 10)
+        } else {
+          await createSession(testData.id)
+        }
       }
 
       setLoading(false)
@@ -49,9 +77,15 @@ export default function Test({ session }) {
   }, [slug, resumeSessionId, session.user.id])
 
   async function createSession(testId) {
+    const insertData = {
+      user_id: session.user.id,
+      test_id: testId,
+      // Only link to assignment if this is a real assignment (not admin)
+      ...(assignedTestId && assignedTestId !== 'admin' ? { assigned_test_id: assignedTestId } : {}),
+    }
     const { data: sess, error: sessErr } = await supabase
       .from('test_sessions')
-      .insert({ user_id: session.user.id, test_id: testId })
+      .insert(insertData)
       .select()
       .single()
 

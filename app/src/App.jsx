@@ -105,7 +105,7 @@ export default function App() {
         />
 
         <Route
-          path="/test/:slug"
+          path="/test/:slug/:assignedTestId"
           element={
             <ProtectedRoute session={session}>
               {!isOnboarded ? <Navigate to="/onboarding" replace /> : <Test session={session} />}
@@ -114,7 +114,7 @@ export default function App() {
         />
 
         <Route
-          path="/test/:slug/resume/:sessionId"
+          path="/test/:slug/:assignedTestId/resume/:sessionId"
           element={
             <ProtectedRoute session={session}>
               <Test session={session} />

@@ -64,7 +64,7 @@ function ResultsTab() {
     async function load() {
       const { data } = await supabase
         .from('test_sessions')
-        .select('id, completed_at, scores, status, tests(name, slug), profiles:user_id(full_name)')
+        .select('id, completed_at, scores, status, assigned_test_id, tests(name, slug), profiles:user_id(full_name)')
         .eq('status', 'completed')
         .order('completed_at', { ascending: false })
       setSessions(data || [])

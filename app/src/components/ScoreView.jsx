@@ -77,41 +77,35 @@ export default function ScoreView({ scores, scales, interps }) {
         </section>
       )}
 
-      {/* Aspect scores grouped by domain */}
+      {/* Aspect scores grouped by domain — domain header includes its own interpretation */}
       {domains.map(domain => {
         const domainAspects = aspects.filter(a => a.domain_id === domain.id)
-        if (!domainAspects.length) return null
+        const domainScore   = scores[domain.slug]
+        const domainInterp  = domainScore?.category
+          ? interps?.[`${domain.id}_${domainScore.category}`]
+          : null
 
         return (
           <section key={domain.id} style={{ marginBottom: '3rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <div style={{
-                width: '4px', height: '1.5rem', borderRadius: '99px',
-                background: domain.color || 'var(--accent)',
-              }} />
-              <h3 style={{ color: 'var(--text)' }}>{domain.display_name}</h3>
-              {scores[domain.slug] && (
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  p{scores[domain.slug].percentile} · {CATEGORY_LABELS[scores[domain.slug].category] || scores[domain.slug].category}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {domainAspects.map(aspect => {
-                const score  = scores[aspect.slug]
-                if (!score) return null
-                const interp = interps?.[`${aspect.id}_${score.category}`]
-                return (
-                  <AspectCard
-                    key={aspect.id}
-                    aspect={aspect}
-                    score={score}
-                    interp={interp}
-                    domainColor={domain.color}
-                  />
-                )
-              })}
-            </div>
+            <DomainHeader domain={domain} score={domainScore} interp={domainInterp} />
+            {domainAspects.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {domainAspects.map(aspect => {
+                  const score  = scores[aspect.slug]
+                  if (!score) return null
+                  const interp = interps?.[`${aspect.id}_${score.category}`]
+                  return (
+                    <AspectCard
+                      key={aspect.id}
+                      aspect={aspect}
+                      score={score}
+                      interp={interp}
+                      domainColor={domain.color}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </section>
         )
       })}
@@ -134,6 +128,52 @@ export default function ScoreView({ scores, scales, interps }) {
             )
           })}
         </section>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Domain header — color bar + name + score + interpretation toggle
+// ─────────────────────────────────────────────────────────────
+function DomainHeader({ domain, score, interp }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{
+          width: '4px', height: '1.5rem', borderRadius: '99px',
+          background: domain.color || 'var(--accent)', flexShrink: 0,
+        }} />
+        <h3 style={{ color: 'var(--text)' }}>{domain.display_name}</h3>
+        {score && (
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {score.percentile != null && `p${score.percentile} · `}
+            {CATEGORY_LABELS[score.category] || score.category}
+          </span>
+        )}
+        {interp?.content && (
+          <button
+            className="btn btn--ghost"
+            style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', color: 'var(--accent)', marginLeft: 'auto' }}
+            onClick={() => setExpanded(e => !e)}
+          >
+            {expanded ? 'Ocultar ↑' : 'Ver interpretación ↓'}
+          </button>
+        )}
+      </div>
+      {expanded && interp?.content && (
+        <div style={{
+          marginTop: '0.75rem', padding: '1rem 1.25rem',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderLeft: `4px solid ${domain.color || 'var(--accent)'}`,
+          borderRadius: 'var(--radius)',
+          fontSize: '0.9rem', lineHeight: '1.7',
+        }}>
+          <InterpretationText blocks={interp.content} scale={domain} score={score} />
+        </div>
       )}
     </div>
   )
@@ -235,19 +275,21 @@ export function AspectCard({ aspect, score, interp, domainColor }) {
 // ─────────────────────────────────────────────────────────────
 // Renders JSONB content blocks, injecting percentile sentence
 // ─────────────────────────────────────────────────────────────
-export function InterpretationText({ blocks, aspect, score }) {
+export function InterpretationText({ blocks, scale, aspect, score }) {
+  const scaleName = (scale || aspect)?.display_name
   return blocks.map((block, i) => {
     if (block.type === 'percentile_inject') {
       const pct   = score.percentile
+      if (pct == null) return null
       const above = pct > 50 ? pct : 100 - pct
       const below = 100 - above
       return (
         <p key={i} style={{ marginTop: '0.75rem' }}>
-          Tu puntaje te posiciona en el percentil <strong>{pct}</strong> de {aspect.display_name}.
+          Tu puntaje te posiciona en el percentil <strong>{pct}</strong> de {scaleName}.
           Esto significa que, si fueras una de 100 personas en una habitación, tendrías{' '}
-          {pct > 50 ? 'mayor' : 'menor'} {aspect.display_name} que{' '}
+          {pct > 50 ? 'mayor' : 'menor'} {scaleName} que{' '}
           <strong>{pct > 50 ? pct : below}</strong> de ellas y{' '}
-          {pct > 50 ? 'menor' : 'mayor'} {aspect.display_name} que{' '}
+          {pct > 50 ? 'menor' : 'mayor'} {scaleName} que{' '}
           <strong>{pct > 50 ? below : pct}</strong> de ellas.
         </p>
       )
