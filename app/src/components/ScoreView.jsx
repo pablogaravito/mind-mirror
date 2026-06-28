@@ -199,15 +199,16 @@ function DomainHeader({ domain, score, interp }) {
         </p>
       )}
 
-      {/* Interpretation toggle + content */}
+      {/* Interpretation */}
       {interp?.content && (
-        <div style={{ paddingLeft: "1.25rem" }}>
+        <div>
           <button
             className="btn btn--ghost"
             style={{
               fontSize: "0.8rem",
               padding: "0.2rem 0",
               color: "var(--accent)",
+              marginLeft: "1.25rem",
             }}
             onClick={() => setExpanded((e) => !e)}
           >
