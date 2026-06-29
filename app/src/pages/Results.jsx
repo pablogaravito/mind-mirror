@@ -185,7 +185,7 @@ export default function Results({ session }) {
                 {pdfRequest.status === "approved" && (
                   <a
                     className="btn btn--primary mt-3"
-                    href={`/api/generate-pdf.cjs?sessionId=${sessionId}`}
+                    href={`/api/generate-pdf.js?sessionId=${sessionId}`}
                     download
                     style={{ display: "inline-block" }}
                   >
