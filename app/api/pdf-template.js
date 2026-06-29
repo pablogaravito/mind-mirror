@@ -56,6 +56,13 @@ const s = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12,
   },
   body: { fontSize: 10, lineHeight: 1.75, color: C.text, marginBottom: 8 },
+  bold: { fontFamily: 'Helvetica-Bold' },
+  italic: { fontFamily: 'Helvetica-Oblique' },
+  // Intro trait list
+  traitRow: { marginBottom: 4, flexDirection: 'row' },
+  traitName: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.text },
+  traitFacets: { fontSize: 10, fontFamily: 'Helvetica-Oblique', color: C.muted },
+  // Domain
   domainHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   domainBar: { width: 3, height: 18, borderRadius: 2, marginRight: 10 },
   domainName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.text, textTransform: 'uppercase' },
@@ -66,7 +73,7 @@ const s = StyleSheet.create({
   barTrack: { flex: 1, height: 5, backgroundColor: C.border, borderRadius: 3 },
   barFill: { height: 5, borderRadius: 3 },
   domainSection: { marginBottom: 20 },
-  aspectWrap: { marginLeft: 13, marginBottom: 20, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: C.border },
+  aspectWrap: { marginBottom: 14, paddingTop: 14 },
   aspectName: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.text, marginBottom: 2 },
   aspectCat: { fontSize: 9, color: C.muted, marginBottom: 5 },
   aspectPctRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
@@ -76,12 +83,22 @@ const s = StyleSheet.create({
   pageNum: { position: 'absolute', bottom: 30, left: 0, right: 0, textAlign: 'center', fontSize: 9, color: C.muted },
 })
 
-const INTRO = [
+// Intro paragraphs — plain text
+const INTRO_PARAS = [
   'Has terminado de evaluarte a ti mismo con 100 frases. El sistema compara tu puntaje con el de miles de otras personas. Se te compara con hombres y mujeres de todas las edades.',
   'Esto significa que, si eres joven, tus puntajes en Neuroticismo serán más altos y los de Amabilidad y Responsabilidad serán más bajos de lo que serían si se te comparara con gente de tu propia edad. Para los hombres, las puntuaciones en Amabilidad y Neuroticismo serán más bajas que si solo se compararan con otros hombres. La idea es mantener las comparaciones simples, de tal forma que puedas saber en qué posición estás en comparación con una persona promedio.',
-  'A continuación, se te presentarán tus resultados en los 5 grandes rasgos de la personalidad y en los 2 aspectos que tiene cada uno de los rasgos. Estos rasgos y aspectos son:\n\nAmabilidad: Compasión y Cortesía\nResponsabilidad: Laboriosidad y Orden\nExtraversión: Entusiasmo y Asertividad\nNeuroticismo: Emoción Negativa e Irritabilidad\nApertura a la Experiencia: Intelecto y Apertura',
-  'Recuerda que cada rasgo y aspecto de la personalidad tiene ventajas y desventajas. Es por esa razón que existe variación en la población: hay un nicho para cada una de las distintas configuraciones de personalidad.',
-  'Ten en cuenta también que si encuentras que las descripciones son más duras de lo que podría parecer apropiado, puede significar que fuiste más autocrítico de lo necesario al completar las preguntas.',
+  'A continuación, se te presentarán tus resultados en los 5 grandes rasgos de la personalidad y en los 2 aspectos que tiene cada uno de los rasgos. Estos rasgos y aspectos son:',
+  'Recuerda que cada rasgo y aspecto de la personalidad tiene ventajas y desventajas. Es por esa razón que existe variación en la población: hay un nicho para cada una de las distintas configuraciones de personalidad. Gran parte de lo que constituye el éxito en la vida es la consecuencia de encontrar el lugar adecuado en las relaciones, el trabajo y el compromiso personal, que se corresponda con tu estructura única de personalidad.',
+  'Ten en cuenta también que si encuentras que las descripciones son más duras de lo que podría parecer apropiado, puede significar que fuiste más autocrítico de lo necesario al completar las preguntas. Recuerda, los resultados se basan en tu propio auto-reporte, en comparación con el de otros.',
+]
+
+// Trait list with bold domain + italic facets
+const TRAIT_LIST = [
+  { domain: 'Amabilidad',                facets: 'Compasión y Cortesía' },
+  { domain: 'Responsabilidad',           facets: 'Laboriosidad y Orden' },
+  { domain: 'Extraversión',              facets: 'Entusiasmo y Asertividad' },
+  { domain: 'Neuroticismo',              facets: 'Emoción Negativa e Irritabilidad' },
+  { domain: 'Apertura a la Experiencia', facets: 'Intelecto y Apertura' },
 ]
 
 const e = React.createElement
@@ -114,8 +131,8 @@ function PageNum() {
 
 export function BfasReport({ profile, session, scales, interps }) {
   const scores  = session.scores || {}
-  const domains = scales.filter(s => s.scale_type === 'domain')
-  const aspects = scales.filter(a => a.scale_type === 'aspect')
+  const domains = scales.filter(sc => sc.scale_type === 'domain')
+  const aspects = scales.filter(sc => sc.scale_type === 'aspect')
 
   const dateStr = session.completed_at
     ? new Date(session.completed_at).toLocaleDateString('es-PE', {
@@ -123,7 +140,7 @@ export function BfasReport({ profile, session, scales, interps }) {
       })
     : '—'
 
-  // Cover
+  // ── Cover ─────────────────────────────────────────────────
   const cover = e(Page, { key: 'cover', size: 'A4', style: s.coverPage },
     e(View, { style: s.accentBar }),
     e(Text, { style: s.coverTitle }, 'Informe de\nPersonalidad'),
@@ -132,23 +149,43 @@ export function BfasReport({ profile, session, scales, interps }) {
     e(Text, { style: s.coverValue }, profile.full_name || '—'),
     e(Text, { style: s.coverLabel }, 'Fecha de evaluación'),
     e(Text, { style: s.coverValue }, dateStr),
-    profile.birth_date ? e(React.Fragment, { key: 'bd' },
-      e(Text, { style: s.coverLabel }, 'Fecha de nacimiento'),
-      e(Text, { style: s.coverValue }, profile.birth_date)
-    ) : null,
+    profile.birth_date
+      ? e(React.Fragment, { key: 'bd' },
+          e(Text, { style: s.coverLabel }, 'Fecha de nacimiento'),
+          e(Text, { style: s.coverValue }, profile.birth_date)
+        )
+      : null,
     e(View, { style: s.coverFooter },
-      e(Text, null, 'Este informe es confidencial y ha sido generado de forma automatizada a partir de las respuestas proporcionadas por el evaluado.')
+      e(Text, null,
+        'Este informe es confidencial y ha sido generado de forma automatizada a partir de las respuestas proporcionadas por el evaluado.'
+      )
     )
   )
 
-  // Intro
+  // ── Intro ──────────────────────────────────────────────────
   const intro = e(Page, { key: 'intro', size: 'A4', style: s.page },
     e(Text, { style: s.sectionLabel }, 'Introducción'),
-    ...INTRO.map((p, i) => e(Text, { key: i, style: s.body }, p)),
+    // Para 1
+    e(Text, { key: 'p0', style: s.body }, INTRO_PARAS[0]),
+    // Para 2
+    e(Text, { key: 'p1', style: s.body }, INTRO_PARAS[1]),
+    // Para 3 + trait list
+    e(Text, { key: 'p2', style: s.body }, INTRO_PARAS[2]),
+    e(View, { key: 'traits', style: { marginBottom: 10, marginLeft: 12 } },
+      ...TRAIT_LIST.map((t, i) =>
+        e(View, { key: i, style: s.traitRow },
+          e(Text, { style: s.traitName }, `${t.domain}: `),
+          e(Text, { style: s.traitFacets }, t.facets)
+        )
+      )
+    ),
+    // Para 4 + 5
+    e(Text, { key: 'p3', style: s.body }, INTRO_PARAS[3]),
+    e(Text, { key: 'p4', style: s.body }, INTRO_PARAS[4]),
     e(PageNum)
   )
 
-  // Domain pages
+  // ── Domain pages ───────────────────────────────────────────
   const domainPages = domains.map(domain => {
     const ds    = scores[domain.slug]
     const di    = ds?.category ? interps[`${domain.id}_${ds.category}`] : null
@@ -159,9 +196,11 @@ export function BfasReport({ profile, session, scales, interps }) {
       const as = scores[aspect.slug]
       if (!as) return null
       const ai = interps[`${aspect.id}_${as.category}`]
-      return e(View, { key: aspect.id, style: s.aspectWrap, wrap: false },
+      return e(View, { key: aspect.id, style: s.aspectWrap },
         e(Text, { style: s.aspectName }, aspect.display_name),
-        as.category ? e(Text, { style: s.aspectCat }, CATEGORY_LABELS[as.category] || as.category) : null,
+        as.category
+          ? e(Text, { style: s.aspectCat }, CATEGORY_LABELS[as.category] || as.category)
+          : null,
         as.percentile != null
           ? e(View, { style: s.aspectPctRow },
               e(Text, { style: s.aspectPctNum }, `p${as.percentile}`),
@@ -175,15 +214,19 @@ export function BfasReport({ profile, session, scales, interps }) {
     }).filter(Boolean)
 
     return e(Page, { key: domain.id, size: 'A4', style: s.page },
-      e(View, { style: s.domainSection },
+      e(View, { style: { ...s.domainSection, marginBottom: 8 } },
         e(View, { style: s.domainHeaderRow },
           e(View, { style: { ...s.domainBar, backgroundColor: color } }),
           e(Text, { style: s.domainName }, domain.display_name),
-          ds?.category ? e(Text, { style: s.domainCat }, CATEGORY_LABELS[ds.category] || ds.category) : null
+          ds?.category
+            ? e(Text, { style: s.domainCat }, CATEGORY_LABELS[ds.category] || ds.category)
+            : null
         ),
         ds?.percentile != null
           ? e(View, { style: s.pctRow },
-              e(View, { style: s.pctBox }, e(Text, { style: s.pctNum }, `p${ds.percentile}`)),
+              e(View, { style: s.pctBox },
+                e(Text, { style: s.pctNum }, `p${ds.percentile}`)
+              ),
               e(View, { style: s.barTrack },
                 e(View, { style: { ...s.barFill, width: `${ds.percentile}%`, backgroundColor: color } })
               )

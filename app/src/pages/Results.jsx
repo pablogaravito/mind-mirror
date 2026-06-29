@@ -170,22 +170,22 @@ export default function Results({ session }) {
             )}
             {pdfRequest && (
               <div style={{ marginTop: "0.5rem" }}>
-                <span className={`badge badge--${pdfRequest.status}`}>
+                <span className={`badge badge--${pdfRequest.status === "downloaded" ? "approved" : pdfRequest.status}`}>
                   {pdfRequest.status === "pending" && "Solicitud pendiente"}
                   {pdfRequest.status === "approved" &&
                     "Aprobado — descarga disponible"}
                   {pdfRequest.status === "rejected" && "Solicitud rechazada"}
-                  {pdfRequest.status === "downloaded" && "Descargado"}
+                  {pdfRequest.status === "downloaded" && "Aprobado — descarga disponible"}
                 </span>
                 {pdfRequest.status === "pending" && (
                   <p className="mt-2" style={{ fontSize: "0.875rem" }}>
                     Un administrador revisará tu solicitud pronto.
                   </p>
                 )}
-                {pdfRequest.status === "approved" && (
+                {(pdfRequest.status === "approved" || pdfRequest.status === "downloaded") && (
                   <a
                     className="btn btn--primary mt-3"
-                    href={`/api/generate-pdf.js?sessionId=${sessionId}`}
+                    href={`/api/generate-pdf?sessionId=${sessionId}`}
                     download
                     style={{ display: "inline-block" }}
                   >

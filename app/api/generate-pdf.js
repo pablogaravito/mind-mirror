@@ -84,13 +84,7 @@ export default async function handler(req, res) {
 
     const buffer = await renderToBuffer(doc)
 
-    // 7. Mark as downloaded
-    await supabase
-      .from('pdf_requests')
-      .update({ status: 'downloaded' })
-      .eq('id', pdfReq.id)
-
-    // 8. Send PDF
+    // 7. Send PDF
     const safeName = (profile?.full_name || 'usuario')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
