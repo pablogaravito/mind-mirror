@@ -183,9 +183,14 @@ export default function Results({ session }) {
                   </p>
                 )}
                 {pdfRequest.status === "approved" && (
-                  <button className="btn btn--primary mt-3">
+                  <a
+                    className="btn btn--primary mt-3"
+                    href={`/api/generate-pdf?sessionId=${sessionId}`}
+                    download
+                    style={{ display: "inline-block" }}
+                  >
                     Descargar PDF
-                  </button>
+                  </a>
                 )}
               </div>
             )}
