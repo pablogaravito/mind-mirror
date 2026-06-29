@@ -2,7 +2,7 @@
 const { createClient } = require('@supabase/supabase-js')
 const { renderToBuffer } = require('@react-pdf/renderer')
 const React = require('react')
-const { BfasReport, CATEGORY_LABELS } = require('./pdf-template.js')
+const { BfasReport, CATEGORY_LABELS } = require('./pdf-template.cjs')
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,

@@ -3,7 +3,7 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/generate-pdf.js": {
+    "api/generate-pdf.cjs": {
       "memory": 1024,
       "maxDuration": 30
     },
