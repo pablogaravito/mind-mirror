@@ -1,5 +1,15 @@
 {
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/generate-pdf.js": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "api/score-session.js": {
+      "memory": 512,
+      "maxDuration": 15
+    }
+  }
 }
