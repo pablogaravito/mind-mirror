@@ -1,15 +1,14 @@
 // api/generate-pdf.js
-const { createClient } = require('@supabase/supabase-js')
-const { renderToBuffer } = require('@react-pdf/renderer')
-const React = require('react')
-const { BfasReport, CATEGORY_LABELS } = require('./pdf-template.js')
+import { createClient } from '@supabase/supabase-js'
+import { renderToBuffer } from '@react-pdf/renderer'
+import { BfasReport } from './pdf-template.js'
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -74,7 +73,8 @@ module.exports = async function handler(req, res) {
       })
     }
 
-    // 6. Generate PDF buffer
+    // 6. Generate PDF — dynamic import of React to avoid ESM issues
+    const { default: React } = await import('react')
     const doc = React.createElement(BfasReport, {
       profile:  profile || { full_name: 'Usuario' },
       session,
@@ -94,6 +94,7 @@ module.exports = async function handler(req, res) {
     const safeName = (profile?.full_name || 'usuario')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="informe-bfas-${safeName}.pdf"`)
     res.setHeader('Content-Length', buffer.length)
