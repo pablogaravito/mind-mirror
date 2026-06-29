@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       .from('pdf_requests')
       .select('id, status, user_id')
       .eq('session_id', sessionId)
-      .eq('status', 'approved')
+      .in('status', ['approved', 'downloaded'])
       .maybeSingle()
 
     if (pdfErr || !pdfReq) {
